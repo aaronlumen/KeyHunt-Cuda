@@ -16,7 +16,7 @@
 */
 
 #include "sha256.h"
-#include <immintrin.h>
+#include "sse2neon.h"
 #include <string.h>
 #include <stdint.h>
 

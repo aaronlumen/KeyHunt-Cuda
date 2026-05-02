@@ -16,6 +16,7 @@
 */
 
 #include <string.h>
+#include <cstdint>
 #include "sha512.h"
 
 #define BSWAP
@@ -61,11 +62,18 @@ static const uint64_t K[80] = {
 #ifndef WIN64
 #define _byteswap_ulong __builtin_bswap32
 #define _byteswap_uint64 __builtin_bswap64
+#if defined(__aarch64__)
+inline uint64_t _rotr64(uint64_t x, uint8_t r)
+{
+    return (x >> r) | (x << (64 - r));
+}
+#else
 inline uint64_t _rotr64(uint64_t x, uint8_t r)
 {
     asm("rorq %1,%0" : "+r"(x) : "c"(r));
     return x;
 }
+#endif
 #endif
 
 #define ROR(x,n) _rotr64(x, n)

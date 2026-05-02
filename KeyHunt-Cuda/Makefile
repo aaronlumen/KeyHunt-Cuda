@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------
-# Makefile for KeyHunt
+# Makefile for KeyHunt — patched for ARM64 + CUDA sm_121 (NVIDIA GB10)
 #
-# Author : Jean-Luc PONS
+# Changes from original:
+#   - Removed -m64 (not valid on aarch64)
+#   - Removed -mssse3 (x86 SIMD; ARM uses sse2neon.h for NEON translation)
+#   - CUDA lib path: lib64 -> lib (ARM64 layout)
+#   - Default CCAP=121 for NVIDIA Blackwell GB10
 
 SRC = Base58.cpp IntGroup.cpp Main.cpp Bloom.cpp Random.cpp \
       Timer.cpp Int.cpp IntMod.cpp Point.cpp SECP256K1.cpp \
@@ -35,21 +39,22 @@ CXX        = g++
 CUDA       = /usr/local/cuda
 CXXCUDA    = /usr/bin/g++
 NVCC       = $(CUDA)/bin/nvcc
-# nvcc requires joint notation w/o dot, i.e. "5.2" -> "52"
+# Default to GB10 Blackwell sm_121; override with: make gpu=1 CCAP=121
+CCAP       ?= 121
 ccap       = $(shell echo $(CCAP) | tr -d '.')
 
 ifdef gpu
 ifdef debug
-CXXFLAGS   = -DWITHGPU -m64  -mssse3 -Wno-write-strings -g -I. -I$(CUDA)/include
+CXXFLAGS   = -DWITHGPU -Wno-write-strings -g -I. -I$(CUDA)/include
 else
-CXXFLAGS   =  -DWITHGPU -m64 -mssse3 -Wno-write-strings -O2 -I. -I$(CUDA)/include
+CXXFLAGS   = -DWITHGPU -Wno-write-strings -O2 -I. -I$(CUDA)/include
 endif
 LFLAGS     = -lgmp -lpthread -L$(CUDA)/lib64 -lcudart
 else
 ifdef debug
-CXXFLAGS   = -m64 -mssse3 -Wno-write-strings -g -I. -I$(CUDA)/include
+CXXFLAGS   = -Wno-write-strings -g -I. -I$(CUDA)/include
 else
-CXXFLAGS   =  -m64 -mssse3 -Wno-write-strings -O2 -I. -I$(CUDA)/include
+CXXFLAGS   = -Wno-write-strings -O2 -I. -I$(CUDA)/include
 endif
 LFLAGS     = -lgmp -lpthread
 endif
@@ -60,10 +65,16 @@ endif
 ifdef gpu
 ifdef debug
 $(OBJDIR)/GPU/GPUEngine.o: GPU/GPUEngine.cu
-	$(NVCC) -G -maxrregcount=0 --ptxas-options=-v --compile --compiler-options -fPIC -ccbin $(CXXCUDA) -m64 -g -I$(CUDA)/include -gencode=arch=compute_$(ccap),code=sm_$(ccap) -o $(OBJDIR)/GPU/GPUEngine.o -c GPU/GPUEngine.cu
+	$(NVCC) -G -maxrregcount=0 --ptxas-options=-v --compile --compiler-options -fPIC \
+	    -ccbin $(CXXCUDA) -g -I$(CUDA)/include \
+	    -gencode=arch=compute_$(ccap),code=sm_$(ccap) \
+	    -o $(OBJDIR)/GPU/GPUEngine.o -c GPU/GPUEngine.cu
 else
 $(OBJDIR)/GPU/GPUEngine.o: GPU/GPUEngine.cu
-	$(NVCC) -maxrregcount=0 --ptxas-options=-v --compile --compiler-options -fPIC -ccbin $(CXXCUDA) -m64 -O2 -I$(CUDA)/include -gencode=arch=compute_$(ccap),code=sm_$(ccap) -o $(OBJDIR)/GPU/GPUEngine.o -c GPU/GPUEngine.cu
+	$(NVCC) -maxrregcount=0 --ptxas-options=-v --compile --compiler-options -fPIC \
+	    -ccbin $(CXXCUDA) -O2 -I$(CUDA)/include \
+	    -gencode=arch=compute_$(ccap),code=sm_$(ccap) \
+	    -o $(OBJDIR)/GPU/GPUEngine.o -c GPU/GPUEngine.cu
 endif
 endif
 
@@ -92,4 +103,3 @@ clean:
 	@rm -f obj/*.o
 	@rm -f obj/GPU/*.o
 	@rm -f obj/hash/*.o
-

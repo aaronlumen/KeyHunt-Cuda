@@ -33,11 +33,18 @@ void inline Initialize(uint32_t *s)
 }
 
 #ifndef WIN64
+#if defined(__aarch64__)
+inline uint32_t _rotl(uint32_t x, uint8_t r)
+{
+    return (x << r) | (x >> (32 - r));
+}
+#else
 inline uint32_t _rotl(uint32_t x, uint8_t r)
 {
     asm("roll %1,%0" : "+r"(x) : "c"(r));
     return x;
 }
+#endif
 #endif
 
 #define ROL(x,n) _rotl(x,n)

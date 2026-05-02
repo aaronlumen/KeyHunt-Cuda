@@ -53,6 +53,8 @@ void usage()
 	printf("                                               :+COUNT\n");
 	printf("                                               Where START, END, COUNT are in hex format\n");
 	printf("-r, --rkey Rkey                          : Random key interval in MegaKeys, default is disabled\n");
+	printf("--dec-prefix PREFIX                      : Narrow range to keys whose decimal value starts with PREFIX\n");
+	printf("                                               e.g. --dec-prefix 376 for puzzle 135 (reduces search by ~99.5%%)\n");
 	printf("-v, --version                            : Show version\n");
 }
 
@@ -224,6 +226,7 @@ int main(int argc, char** argv)
 	Int rangeEnd;
 	rangeStart.SetInt32(0);
 	rangeEnd.SetInt32(0);
+	std::string decPrefix;
 
 	int searchMode = 0;
 	int coinType = COIN_BTC;
@@ -247,6 +250,7 @@ int main(int argc, char** argv)
 	parser.add("", "--coin", true);
 	parser.add("", "--range", true);
 	parser.add("-r", "--rkey", true);
+	parser.add("", "--dec-prefix", true);
 	parser.add("-v", "--version", false);
 
 	if (argc == 1) {
@@ -288,7 +292,7 @@ int main(int argc, char** argv)
 				return 0;
 			}
 			else if (optArg.equals("-l", "--list")) {
-#ifdef WIN64
+#ifdef WITHGPU
 				GPUEngine::PrintCudaInfo();
 #else
 				printf("GPU code not compiled, use -DWITHGPU when compiling.\n");
@@ -333,6 +337,13 @@ int main(int argc, char** argv)
 			else if (optArg.equals("", "--range")) {
 				std::string range = optArg.arg;
 				parseRange(range, rangeStart, rangeEnd);
+			}
+			else if (optArg.equals("", "--dec-prefix")) {
+				decPrefix = optArg.arg;
+				for (char c : decPrefix) {
+					if (c < '0' || c > '9')
+						throw std::string("--dec-prefix must contain only decimal digits");
+				}
 			}
 			else if (optArg.equals("-r", "--rkey")) {
 				rKey = std::stoull(optArg.arg);
@@ -475,6 +486,42 @@ int main(int argc, char** argv)
 		usage();
 		return -1;
 	}
+
+	if (!decPrefix.empty()) {
+		std::string startDec = rangeStart.GetBase10();
+		std::string endDec   = rangeEnd.GetBase10();
+		// Use the digit-count of rangeStart; if the range spans a digit-length boundary
+		// we take both windows and pick the one that intersects.
+		std::vector<std::pair<std::string,std::string>> candidates;
+		for (int digits = (int)startDec.size(); digits <= (int)endDec.size(); digits++) {
+			if ((int)decPrefix.size() > digits) continue;
+			int pad = digits - (int)decPrefix.size();
+			std::string subStartStr = decPrefix + std::string(pad, '0');
+			std::string subEndStr   = decPrefix + std::string(pad, '9');
+			candidates.push_back({subStartStr, subEndStr});
+		}
+		// Find the first (and usually only) intersecting sub-range
+		bool found = false;
+		for (auto& c : candidates) {
+			Int subStart; subStart.SetBase10(c.first.c_str());
+			Int subEnd;   subEnd.SetBase10(c.second.c_str());
+			// effective = [max(rangeStart,subStart), min(rangeEnd,subEnd)]
+			Int effStart; effStart.Set(&rangeStart);
+			Int effEnd;   effEnd.Set(&rangeEnd);
+			if (subStart.IsGreater(&effStart)) effStart.Set(&subStart);
+			if (subEnd.IsLower(&effEnd))       effEnd.Set(&subEnd);
+			if (!effStart.IsGreater(&effEnd)) {
+				rangeStart.Set(&effStart);
+				rangeEnd.Set(&effEnd);
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			printf("Error: --dec-prefix %s has no intersection with the specified range\n", decPrefix.c_str());
+			return -1;
+		}
+	}
 	if (nbCPUThread > 0 && gpuEnable) {
 		printf("Error: %s\n", "Invalid arguments, CPU and GPU, both can't be used together right now\n");
 		usage();
@@ -558,6 +605,12 @@ int main(int argc, char** argv)
 		}
 	}
 	printf("OUTPUT FILE  : %s\n", outputFile.c_str());
+	if (!decPrefix.empty()) {
+		printf("DEC PREFIX   : %s  (range: %s .. %s)\n",
+			decPrefix.c_str(),
+			rangeStart.GetBase10().c_str(),
+			rangeEnd.GetBase10().c_str());
+	}
 
 
 #ifdef WIN64

@@ -17,7 +17,7 @@
 
 #include "ripemd160.h"
 #include <string.h>
-#include <immintrin.h>
+#include "sse2neon.h"
 
 // Internal SSE RIPEMD-160 implementation.
 namespace ripemd160sse

@@ -214,6 +214,54 @@ private:
 
 #ifndef WIN64
 
+#if defined(__aarch64__)
+
+// ARM64 replacements using __uint128_t
+static uint64_t inline _umul128(uint64_t a, uint64_t b, uint64_t* h) {
+	unsigned __int128 r = (unsigned __int128)a * b;
+	*h = (uint64_t)(r >> 64);
+	return (uint64_t)r;
+}
+
+static int64_t inline _mul128(int64_t a, int64_t b, int64_t* h) {
+	__int128 r = (__int128)a * b;
+	*h = (int64_t)((unsigned __int128)r >> 64);
+	return (int64_t)r;
+}
+
+static uint64_t inline _udiv128(uint64_t hi, uint64_t lo, uint64_t d, uint64_t* r) {
+	unsigned __int128 n = ((unsigned __int128)hi << 64) | lo;
+	*r = (uint64_t)(n % d);
+	return (uint64_t)(n / d);
+}
+
+static uint64_t inline __rdtsc() {
+	uint64_t val;
+	__asm__ volatile("mrs %0, cntvct_el0" : "=r"(val));
+	return val;
+}
+
+#define __shiftright128(a,b,n) ((a)>>(n))|((b)<<(64-(n)))
+#define __shiftleft128(a,b,n) ((b)<<(n))|((a)>>(64-(n)))
+
+static inline unsigned char _addcarry_u64(unsigned char c_in, uint64_t a, uint64_t b, uint64_t* out) {
+	unsigned __int128 r = (unsigned __int128)a + b + c_in;
+	*out = (uint64_t)r;
+	return (unsigned char)(r >> 64);
+}
+
+static inline unsigned char _subborrow_u64(unsigned char b_in, uint64_t a, uint64_t b, uint64_t* out) {
+	unsigned __int128 r = (unsigned __int128)a - b - b_in;
+	*out = (uint64_t)r;
+	return (unsigned char)((r >> 127) & 1);
+}
+
+#define _byteswap_uint64 __builtin_bswap64
+#define LZC(x) __builtin_clzll(x)
+#define TZC(x) __builtin_ctzll(x)
+
+#else  /* x86-64 */
+
 // Missing intrinsics
 static uint64_t inline _umul128(uint64_t a, uint64_t b, uint64_t* h) {
 	uint64_t rhi;
@@ -255,6 +303,8 @@ static uint64_t inline __rdtsc() {
 #define _byteswap_uint64 __builtin_bswap64
 #define LZC(x) __builtin_clzll(x)
 #define TZC(x) __builtin_ctzll(x)
+
+#endif  /* __aarch64__ */
 
 #else
 

@@ -19,7 +19,11 @@
 #include "IntGroup.h"
 #include <string.h>
 #include <math.h>
+#if defined(__aarch64__)
+#include "hash/sse2neon.h"
+#else
 #include <emmintrin.h>
+#endif
 #include "Timer.h"
 
 #define MAX(x,y) (((x)>(y))?(x):(y))
